@@ -1,0 +1,1363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Liquor Store Inventory</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .hidden { display: none !important; }
+        /* Basic styling for the loading spinner */
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-left-color: #ffffff;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            vertical-align: middle;
+            margin-left: 8px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Modal styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background: white;
+            padding: 24px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            max-width: 400px;
+            width: 90%;
+            text-align: center;
+        }
+        .modal-buttons {
+            margin-top: 16px;
+        }
+        .modal-buttons button {
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 0 8px;
+        }
+        .modal-buttons .confirm-btn {
+            background-color: #ef4444; /* Red */
+            color: white;
+        }
+        .modal-buttons .cancel-btn {
+            background-color: #6b7280; /* Gray */
+            color: white;
+        }
+        #daily-sales-chart {
+            max-width: 100%;
+            max-height: 100%;
+            width: 100%;
+            height: 100%;
+        }
+        #weekly-sales-chart {
+            max-width: 100%;
+            max-height: 100%;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans">
+    <div class="container mx-auto p-4">
+        <div id="login-section" class="mb-6">
+            <h1 class="text-2xl font-bold mb-4">Liquor Store Inventory</h1>
+            <div id="login-form" class="bg-white p-6 rounded shadow-md">
+                <h2 class="text-xl font-semibold mb-4">Login</h2>
+                <input id="id-number" type="text" placeholder="ID Number" class="border p-2 mb-2 w-full rounded-md">
+                <input id="password" type="password" placeholder="Password" class="border p-2 mb-2 w-full rounded-md">
+                <button onclick="login()" class="bg-blue-500 text-white p-2 rounded w-full hover:bg-blue-600 transition duration-300 ease-in-out flex items-center justify-center">
+                    Login <span id="login-spinner" class="spinner hidden"></span>
+                </button>
+                <p id="login-error" class="text-red-500 mt-2 hidden"></p>
+                <div id="admin-instructions" class="mt-4 text-sm text-gray-600 hidden">
+                    <p><strong>First time setup:</strong> Register as admin</p>
+                    <p>1. Use your desired admin ID and password</p>
+                    <p>2. After login, you'll be prompted to set a new password</p>
+                </div>
+            </div>
+        </div>
+
+        <div id="change-password-section" class="bg-white p-6 rounded shadow-md mt-4 hidden">
+            <h2 class="text-xl font-semibold mb-4">Change Password</h2>
+            <p class="mb-2">You must set a new password for your first login.</p>
+            <input id="new-password" type="password" placeholder="New Password" class="border p-2 mb-2 w-full rounded-md">
+            <button onclick="changePassword()" class="bg-blue-500 text-white p-2 rounded w-full hover:bg-blue-600 transition duration-300 ease-in-out flex items-center justify-center">
+                Set Password <span id="change-password-spinner" class="spinner hidden"></span>
+            </button>
+            <p id="change-password-error" class="text-red-500 mt-2 hidden"></p>
+        </div>
+
+        <div id="admin-section" class="bg-white p-6 rounded shadow-md mb-6 hidden">
+            <h2 class="text-xl font-semibold mb-4">Admin Panel</h2>
+    
+            <div class="mb-6">
+                <h3 class="text-lg font-semibold mb-2">Add New Operator</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <input id="operator-id" type="text" placeholder="Operator ID" class="border p-2 rounded-md">
+                    <input id="operator-name" type="text" placeholder="Operator Name" class="border p-2 rounded-md">
+                </div>
+                <button onclick="addOperator()" class="bg-green-500 text-white p-2 rounded mt-2 hover:bg-green-600 transition duration-300 ease-in-out flex items-center justify-center">
+                    Add Operator <span id="add-operator-spinner" class="spinner hidden"></span>
+                </button>
+                <p id="operator-error" class="text-red-500 mt-2 hidden"></p>
+            </div>
+    
+            <div>
+                <h3 class="text-lg font-semibold mb-2">Operators</h3>
+                <table class="w-full border-collapse border border-gray-300">
+                    <thead>
+                        <tr class="bg-gray-200">
+                            <th class="p-2 border border-gray-300 text-left">ID</th>
+                            <th class="p-2 border border-gray-300 text-left">Name</th>
+                            <th class="p-2 border border-gray-300 text-left">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="operators-table"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="app-section" class="hidden">
+            <button onclick="logout()" class="bg-red-500 text-white p-2 rounded mb-4 hover:bg-red-600 transition duration-300 ease-in-out">Logout</button>
+
+            <div class="bg-white p-6 rounded shadow-md mb-6">
+                <h2 class="text-xl font-semibold mb-4">Manage Inventory</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <input id="item-id" type="text" placeholder="Item ID (SKU)" class="border p-2 rounded-md">
+                    <input id="item-name" type="text" placeholder="Item Name" class="border p-2 rounded-md">
+                    <select id="item-category" class="border p-2 rounded-md">
+                        <option value="liquor">Liquor</option>
+                        <option value="wine">Wine</option>
+                        <option value="cigarette">Cigarette</option>
+                    </select>
+                    <input id="item-bottle-size" type="text" placeholder="Bottle Size (e.g., 750ml)" class="border p-2 rounded-md">
+                    <input id="item-quantity" type="number" placeholder="Quantity (packs for cigarettes)" class="border p-2 rounded-md">
+                    <input id="item-price" type="number" step="0.01" placeholder="Price" class="border p-2 rounded-md">
+                    <input id="item-cost-price" type="number" step="0.01" placeholder="Cost Price" class="border p-2 rounded-md">
+                </div>
+                <button onclick="addItem()" class="bg-green-500 text-white p-2 rounded hover:bg-green-600 transition duration-300 ease-in-out flex items-center justify-center">
+                    Add Item <span id="add-item-spinner" class="spinner hidden"></span>
+                </button>
+                <p id="item-error" class="text-red-500 mt-2 hidden"></p>
+                <h3 class="text-lg font-semibold mt-4">Inventory</h3>
+                <table class="w-full mt-2 border-collapse border border-gray-300">
+                    <thead>
+                        <tr class="bg-gray-200">
+                            <th class="p-2 border border-gray-300 text-left">ID</th>
+                            <th class="p-2 border border-gray-300 text-left">Name</th>
+                            <th class="p-2 border border-gray-300 text-left">Category</th>
+                            <th class="p-2 border border-gray-300 text-left">Bottle Size</th>
+                            <th class="p-2 border border-gray-300 text-left">Quantity</th>
+                            <th class="p-2 border border-gray-300 text-left">Price</th>
+                            <th class="p-2 border border-gray-300 text-left">Cost Price</th>
+                            <th class="p-2 border border-gray-300 text-left">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="inventory-table"></tbody>
+                </table>
+            </div>
+
+            <div class="bg-white p-6 rounded shadow-md mb-6">
+                <h2 class="text-xl font-semibold mb-4">Record Sale</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <select id="sale-item-id" class="border p-2 rounded-md"></select>
+                    <input id="sale-quantity" type="number" placeholder="Quantity" class="border p-2 rounded-md">
+                    <select id="sale-payment-method" class="border p-2 rounded-md">
+                        <option value="Cash">Cash</option>
+                        <option value="Mpesa">Mpesa</option>
+                    </select>
+                </div>
+                <button onclick="recordSale()" class="bg-blue-500 text-white p-2 rounded w-full hover:bg-blue-600 transition duration-300 ease-in-out flex items-center justify-center">
+                    Record Sale <span id="record-sale-spinner" class="spinner hidden"></span>
+                </button>
+                <p id="sale-error" class="text-red-500 mt-2 hidden"></p>
+            </div>
+
+            <div class="bg-white p-6 rounded shadow-md mb-6">
+                <h2 class="text-xl font-semibold mb-4">Record Expense</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <input id="expense-description" type="text" placeholder="Description" class="border p-2 rounded-md">
+                    <input id="expense-amount" type="number" step="0.01" placeholder="Amount" class="border p-2 rounded-md">
+                </div>
+                <button onclick="recordExpense()" class="bg-blue-500 text-white p-2 rounded hover:bg-blue-600 transition duration-300 ease-in-out flex items-center justify-center">
+                    Record Expense <span id="record-expense-spinner" class="spinner hidden"></span>
+                </button>
+                <p id="expense-error" class="text-red-500 mt-2 hidden"></p>
+            </div>
+
+            <div class="bg-white p-6 rounded shadow-md mb-6">
+                <h2 class="text-xl font-semibold mb-4">Recent Expenses</h2>
+                <table class="w-full mt-2 border-collapse border border-gray-300">
+                    <thead>
+                        <tr class="bg-gray-200">
+                            <th class="p-2 border border-gray-300 text-left">Description</th>
+                            <th class="p-2 border border-gray-300 text-left">Amount (KSh)</th>
+                            <th class="p-2 border border-gray-300 text-left">Timestamp</th>
+                        </tr>
+                    </thead>
+                    <tbody id="expenses-table"></tbody>
+                </table>
+                <p id="expenses-error" class="text-red-500 mt-2 hidden"></p>
+            </div>
+
+            <div class="bg-white p-6 rounded shadow-md mb-6">
+                <h2 class="text-xl font-semibold mb-4">Financial Summary</h2>
+                <div id="financials"></div>
+            </div>
+
+            <div class="bg-white p-6 rounded shadow-md mb-6">
+                <h2 class="text-xl font-semibold mb-4">Analytics</h2>
+                <div class="mb-4">
+                    <h3 class="text-lg font-semibold">Most Frequent Sales</h3>
+                    <table class="w-full mt-2 border-collapse border border-gray-300">
+                        <thead>
+                            <tr class="bg-gray-200">
+                                <th class="p-2 border border-gray-300 text-left">Item Name</th>
+                                <th class="p-2 border border-gray-300 text-left">Total Sold</th>
+                            </tr>
+                        </thead>
+                        <tbody id="frequent-sales-table"></tbody>
+                    </table>
+                </div>
+                <div class="mb-4">
+                    <h3 class="text-lg font-semibold">Daily Sales</h3>
+                    <input id="daily-sales-date" type="date" class="border p-2 mr-2 rounded-md">
+                    <button onclick="getDailySales()" class="bg-blue-500 text-white p-2 rounded hover:bg-blue-600 transition duration-300 ease-in-out flex items-center justify-center">
+                        Get Daily Sales <span id="daily-sales-spinner" class="spinner hidden"></span>
+                    </button>
+
+                    <div id="daily-sales-error" class="text-red-500 mt-2 hidden"></div>
+
+                    <div id="daily-sales-content" class="mt-2">
+                        <canvas id="daily-sales-chart" class="mt-4"></canvas>
+                        <div id="daily-sales-table-container" class="mt-4"></div>
+                    </div>
+                </div>
+                <div>
+                    <h3 class="text-lg font-semibold">Weekly Sales</h3>
+                    <input id="weekly-sales-date" type="date" class="border p-2 mr-2 rounded-md">
+                    <button onclick="getWeeklySales()" class="bg-blue-500 text-white p-2 rounded hover:bg-blue-600 transition duration-300 ease-in-out flex items-center justify-center">
+                        Get Weekly Sales <span id="weekly-sales-spinner" class="spinner hidden"></span>
+                    </button>
+                    
+                    <div id="weekly-sales-error" class="text-red-500 mt-2 hidden"></div>
+
+                    <div id="weekly-sales-content" class="mt-2">
+                        <canvas id="weekly-sales-chart" class="mt-4"></canvas>
+                        <div id="weekly-sales-table-container" class="mt-4"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="custom-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <p id="modal-message" class="text-lg font-semibold"></p>
+            <div class="modal-buttons">
+                <button id="modal-confirm-btn" class="confirm-btn">Confirm</button>
+                <button id="modal-cancel-btn" class="cancel-btn">Cancel</button>
+                <button id="modal-ok-btn" class="bg-blue-500 text-white hidden">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let globalInventory = [];
+        let currentUserRole = "";
+        let currentUserId = "";
+        const API_URL = "http://localhost:8000"; // Ensure this matches your FastAPI server URL
+
+        // Store Chart instances globally to destroy them later
+        let dailySalesChartInstance = null;
+        let weeklySalesChartInstance = null;
+
+        // --- Utility Functions ---
+        function showSpinner(elementId) {
+            document.getElementById(elementId).classList.remove("hidden");
+        }
+
+        function hideSpinner(elementId) {
+            document.getElementById(elementId).classList.add("hidden");
+        }
+
+        function showError(elementId, message) {
+            const element = document.getElementById(elementId);
+            element.textContent = message;
+            element.classList.remove("hidden");
+        }
+
+        function hideError(elementId) {
+            const element = document.getElementById(elementId);
+            element.classList.add("hidden");
+            element.textContent = "";
+        }
+
+        // Custom Modal Implementation
+        let resolveModalPromise;
+        function showModal(message, type = 'alert') {
+            const modal = document.getElementById('custom-modal');
+            const modalMessage = document.getElementById('modal-message');
+            const confirmBtn = document.getElementById('modal-confirm-btn');
+            const cancelBtn = document.getElementById('modal-cancel-btn');
+            const okBtn = document.getElementById('modal-ok-btn');
+
+            modalMessage.textContent = message;
+            modal.classList.remove('hidden');
+
+            if (type === 'confirm') {
+                confirmBtn.classList.remove('hidden');
+                cancelBtn.classList.remove('hidden');
+                okBtn.classList.add('hidden');
+            } else { // 'alert'
+                confirmBtn.classList.add('hidden');
+                cancelBtn.classList.add('hidden');
+                okBtn.classList.remove('hidden');
+            }
+
+            return new Promise(resolve => {
+                resolveModalPromise = resolve;
+            });
+        }
+
+        document.getElementById('modal-confirm-btn').onclick = () => {
+            document.getElementById('custom-modal').classList.add('hidden');
+            resolveModalPromise(true);
+        };
+
+        document.getElementById('modal-cancel-btn').onclick = () => {
+            document.getElementById('custom-modal').classList.add('hidden');
+            resolveModalPromise(false);
+        };
+
+        document.getElementById('modal-ok-btn').onclick = () => {
+            document.getElementById('custom-modal').classList.add('hidden');
+            resolveModalPromise(true); // For alert, 'OK' means acknowledged
+        };
+
+        // --- Section Toggling Logic ---
+        function toggleSections(mustChangePassword = false) {
+            const token = localStorage.getItem("token");
+            const loginSection = document.getElementById("login-section");
+            const changePasswordSection = document.getElementById("change-password-section");
+            const appSection = document.getElementById("app-section");
+            const adminSection = document.getElementById("admin-section");
+
+            // Hide all sections initially
+            loginSection.classList.add("hidden");
+            changePasswordSection.classList.add("hidden");
+            appSection.classList.add("hidden");
+            adminSection.classList.add("hidden");
+
+            if (token) {
+                if (mustChangePassword) {
+                    changePasswordSection.classList.remove("hidden");
+                } else {
+                    appSection.classList.remove("hidden");
+                    getCurrentUser(); // Load user details and then decide admin section visibility
+                    loadDashboardData();
+                }
+            } else {
+                loginSection.classList.remove("hidden");
+                checkAdminInstructions();
+            }
+        }
+
+        async function checkAdminInstructions() {
+            try {
+                const response = await fetch(`${API_URL}/users/count`);
+                const countData = await response.json();
+                if (countData.count === 0) {
+                    document.getElementById("admin-instructions").classList.remove("hidden");
+                } else {
+                    document.getElementById("admin-instructions").classList.add("hidden");
+                }
+            } catch (error) {
+                console.error("Failed to check user count for admin instructions:", error);
+            }
+        }
+
+        function loadDashboardData() {
+            // This function groups all data loading for the main app section
+            loadInventory();
+            loadSaleItems();
+            loadFinancials();
+            loadFrequentSales();
+            loadExpenses(); // New: Load expenses
+        }
+
+        // --- Authentication Functions ---
+        async function login() {
+            hideError("login-error");
+            showSpinner("login-spinner");
+            const idNumber = document.getElementById("id-number").value;
+            const password = document.getElementById("password").value;
+
+            if (!idNumber || !password) {
+                showError("login-error", "Please enter both ID Number and Password.");
+                hideSpinner("login-spinner");
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_URL}/login`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                    body: `username=${encodeURIComponent(idNumber)}&password=${encodeURIComponent(password)}`
+                });
+                const data = await response.json();
+
+                if (response.ok) {
+                    localStorage.setItem("token", data.access_token);
+                    localStorage.setItem("must_change_password", data.must_change_password.toString());
+                    toggleSections(data.must_change_password);
+                } else {
+                    showError("login-error", data.detail || "Login failed");
+                }
+            } catch (error) {
+                console.error("Login error:", error);
+                showError("login-error", "Failed to login. Please check your network or server.");
+            } finally {
+                hideSpinner("login-spinner");
+            }
+        }
+        
+        async function getCurrentUser() {
+            try {
+                const response = await fetch(`${API_URL}/users/me`, {
+                    headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+                });
+
+                if (!response.ok) {
+                    console.error("Failed to get user role", response.status, response.statusText);
+                    logout(); // Optionally, force logout if token is invalid
+                    return;
+                }
+
+                const user = await response.json();
+                currentUserRole = user.role;
+                currentUserId = user.id_number; // Store user ID if needed
+
+                if (user.role === "admin") {
+                    document.getElementById("admin-section").classList.remove("hidden");
+                    loadOperators();
+                } else {
+                    document.getElementById("admin-section").classList.add("hidden");
+                }
+                updateInventoryUI(); // Update UI elements that depend on role
+            } catch (error) {
+                console.error("Failed to get user role", error);
+                showError("login-error", "Failed to load user data. Please try logging in again.");
+                logout(); // Force logout on error
+            }
+        }
+
+        async function changePassword() {
+            hideError("change-password-error");
+            showSpinner("change-password-spinner");
+            const newPassword = document.getElementById("new-password").value;
+
+            if (!newPassword) {
+                showError("change-password-error", "New password cannot be empty.");
+                hideSpinner("change-password-spinner");
+                return;
+            }
+            if (newPassword.length < 6) { // Example: minimum password length
+                showError("change-password-error", "Password must be at least 6 characters long.");
+                hideSpinner("change-password-spinner");
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_URL}/change-password`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${localStorage.getItem("token")}`
+                    },
+                    body: JSON.stringify({ new_password: newPassword })
+                });
+                const data = await response.json();
+
+                if (response.ok) {
+                    localStorage.removeItem("must_change_password");
+                    showModal("Password changed successfully!", 'alert');
+                    toggleSections(false); // Go to main app section
+                } else {
+                    showError("change-password-error", data.detail || "Failed to change password");
+                }
+            } catch (error) {
+                console.error("Change password error:", error);
+                showError("change-password-error", "Failed to change password. Please try again.");
+            } finally {
+                hideSpinner("change-password-spinner");
+                document.getElementById("new-password").value = ""; // Clear field
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem("token");
+            localStorage.removeItem("must_change_password");
+            currentUserRole = ""; // Clear role on logout
+            toggleSections(); // Go back to login
+        }
+
+        // --- Operator Management Functions ---
+        async function loadOperators() {
+            try {
+                const response = await fetch(`${API_URL}/admin/operators`, {
+                    headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+                });
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || "Failed to load operators");
+                }
+                const operators = await response.json();
+                const table = document.getElementById("operators-table");
+                table.innerHTML = "";
+                operators.forEach(op => {
+                    const row = document.createElement("tr");
+                    row.className = "hover:bg-gray-50";
+                    row.innerHTML = `
+                        <td class="p-2 border border-gray-300">${op.id_number}</td>
+                        <td class="p-2 border border-gray-300">${op.name}</td>
+                        <td class="p-2 border border-gray-300">
+                            <button onclick="deleteOperator('${op.id_number}')" class="bg-red-500 text-white p-1 rounded hover:bg-red-600 transition duration-300 ease-in-out">Delete</button>
+                        </td>
+                    `;
+                    table.appendChild(row);
+                });
+            } catch (error) {
+                console.error("Failed to load operators", error);
+                showError("operator-error", `Failed to load operators: ${error.message}`);
+            }
+        }
+
+        async function addOperator() {
+            hideError("operator-error");
+            showSpinner("add-operator-spinner");
+            const id = document.getElementById("operator-id").value;
+            const name = document.getElementById("operator-name").value;
+
+            if (!id || !name) {
+                showError("operator-error", "Operator ID and Name are required.");
+                hideSpinner("add-operator-spinner");
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_URL}/register`, {
+                    method: "POST",
+                    headers: { 
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${localStorage.getItem("token")}`
+                    },
+                    body: JSON.stringify({ 
+                        id_number: id, 
+                        name: name,
+                        role: "operator" // Explicitly set role for new operators
+                    })
+                });
+                if (response.ok) {
+                    showModal("Operator added successfully!", 'alert');
+                    loadOperators();
+                    document.getElementById("operator-id").value = "";
+                    document.getElementById("operator-name").value = "";
+                } else {
+                    const error = await response.json();
+                    showError("operator-error", error.detail || "Failed to add operator");
+                }
+            } catch (error) {
+                console.error("Add operator error:", error);
+                showError("operator-error", "Failed to add operator. Please check server connection.");
+            } finally {
+                hideSpinner("add-operator-spinner");
+            }
+        }
+
+        async function deleteOperator(id) {
+            const confirmed = await showModal(`Are you sure you want to delete operator ${id}?`, 'confirm');
+            if (!confirmed) return;
+
+            try {
+                const response = await fetch(`${API_URL}/admin/operators/${id}`, {
+                    method: "DELETE",
+                    headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+                });
+                if (response.ok) {
+                    showModal("Operator deleted successfully!", 'alert');
+                    loadOperators();
+                } else {
+                    const error = await response.json();
+                    showModal(error.detail || "Failed to delete operator", 'alert');
+                }
+            } catch (error) {
+                console.error("Delete operator error:", error);
+                showModal("Failed to delete operator. Please check server connection.", 'alert');
+            }
+        }
+        
+        // --- Inventory Management Functions ---
+        function updateInventoryUI() {
+            // This function can be used to hide/show specific elements based on role
+            // For example, if only admin can delete items:
+            document.querySelectorAll("#inventory-table button.bg-red-500").forEach(btn => {
+                btn.style.display = currentUserRole === "admin" ? "inline-block" : "none";
+            });
+            // Also enable/disable add/edit item forms for operators if needed
+            const addItemButton = document.querySelector("#app-section .bg-green-500");
+            if (addItemButton) {
+                addItemButton.disabled = currentUserRole !== "admin";
+                addItemButton.classList.toggle("opacity-50", currentUserRole !== "admin");
+                addItemButton.classList.toggle("cursor-not-allowed", currentUserRole !== "admin");
+            }
+            document.getElementById("item-id").disabled = currentUserRole !== "admin";
+            document.getElementById("item-name").disabled = currentUserRole !== "admin";
+            document.getElementById("item-category").disabled = currentUserRole !== "admin";
+            document.getElementById("item-bottle-size").disabled = currentUserRole !== "admin";
+            document.getElementById("item-quantity").disabled = currentUserRole !== "admin";
+            document.getElementById("item-price").disabled = currentUserRole !== "admin";
+            document.getElementById("item-cost-price").disabled = currentUserRole !== "admin";
+        }
+
+        async function loadInventory() {
+            try {
+                const response = await fetch(`${API_URL}/items/`, {
+                    headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+                });
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || "Failed to load inventory");
+                }
+                const items = await response.json();
+                globalInventory = items; // Store for analytics
+                const table = document.getElementById("inventory-table");
+                table.innerHTML = "";
+                items.forEach(item => {
+                    const row = document.createElement("tr");
+                    row.className = "hover:bg-gray-50";
+                    row.innerHTML = `
+                        <td class="p-2 border border-gray-300">${item.id}</td>
+                        <td class="p-2 border border-gray-300">${item.name}</td>
+                        <td class="p-2 border border-gray-300">${item.category}</td>
+                        <td class="p-2 border border-gray-300">${item.bottle_size || "N/A"}</td>
+                        <td class="p-2 border border-gray-300">${item.category === "cigarette" ? `${item.quantity} packs (${item.quantity * 20} cigarettes)` : item.quantity}</td>
+                        <td class="p-2 border border-gray-300">KSh ${item.price.toFixed(2)}</td>
+                        <td class="p-2 border border-gray-300">KSh ${item.cost_price.toFixed(2)}</td>
+                        <td class="p-2 border border-gray-300">
+                            <button onclick="editItem('${item.id}')" class="bg-yellow-500 text-white p-1 rounded mr-2 hover:bg-yellow-600 transition duration-300 ease-in-out">Edit</button>
+                            <button onclick="deleteItem('${item.id}')" class="bg-red-500 text-white p-1 rounded hover:bg-red-600 transition duration-300 ease-in-out">Delete</button>
+                        </td>
+                    `;
+                    table.appendChild(row);
+                });
+                updateInventoryUI(); // Apply role-based visibility after loading
+            } catch (error) {
+                console.error("loadInventory error:", error);
+                showError("item-error", `Failed to load inventory: ${error.message}`);
+            }
+        }
+
+        async function addItem(idToUpdate = null) {
+            hideError("item-error");
+            showSpinner("add-item-spinner");
+
+            const itemId = document.getElementById("item-id").value;
+            const itemName = document.getElementById("item-name").value;
+            const itemCategory = document.getElementById("item-category").value;
+            const itemBottleSize = document.getElementById("item-bottle-size").value || null;
+            const itemQuantity = parseInt(document.getElementById("item-quantity").value);
+            const itemPrice = parseFloat(document.getElementById("item-price").value);
+            const itemCostPrice = parseFloat(document.getElementById("item-cost-price").value) || 0;
+
+            if (!itemName || !itemCategory || isNaN(itemQuantity) || isNaN(itemPrice) || isNaN(itemCostPrice)) {
+                showError("item-error", "All fields except bottle size are required and must be valid numbers.");
+                hideSpinner("add-item-spinner");
+                return;
+            }
+            if (!idToUpdate && !itemId) {
+                showError("item-error", "Item ID (SKU) is required for new items.");
+                hideSpinner("add-item-spinner");
+                return;
+            }
+            if (itemCategory === "cigarette" && itemBottleSize) {
+                showError("item-error", "Cigarettes do not have bottle sizes.");
+                hideSpinner("add-item-spinner");
+                return;
+            }
+
+            const item = {
+                id: itemId,
+                name: itemName,
+                category: itemCategory,
+                bottle_size: itemBottleSize,
+                quantity: itemQuantity,
+                price: itemPrice,
+                cost_price: itemCostPrice
+            };
+
+            try {
+                const url = idToUpdate ? `${API_URL}/items/${idToUpdate}` : `${API_URL}/items/`;
+                const method = idToUpdate ? "PUT" : "POST";
+                const response = await fetch(url, {
+                    method,
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${localStorage.getItem("token")}`
+                    },
+                    body: JSON.stringify(item)
+                });
+                const data = await response.json();
+
+                if (response.ok) {
+                    showModal(`Item ${idToUpdate ? 'updated' : 'added'} successfully!`, 'alert');
+                    loadInventory();
+                    loadSaleItems();
+                    // Clear form fields
+                    document.getElementById("item-id").value = "";
+                    document.getElementById("item-name").value = "";
+                    document.getElementById("item-bottle-size").value = "";
+                    document.getElementById("item-quantity").value = "";
+                    document.getElementById("item-price").value = "";
+                    document.getElementById("item-cost-price").value = "";
+                    document.getElementById("item-id").disabled = false; // Re-enable ID for new additions
+                    document.querySelector("#item-error button")?.remove(); // Remove update button if present
+                } else {
+                    showError("item-error", data.detail || "Failed to save item");
+                }
+            } catch (error) {
+                console.error("addItem error:", error);
+                showError("item-error", "Failed to save item. Please check your network or server.");
+            } finally {
+                hideSpinner("add-item-spinner");
+            }
+        }
+
+
+         // Add this function to auto-fill item details
+        async function autoFillItemDetails() {
+            const itemId = document.getElementById("item-id").value.trim();
+            if (!itemId) return;
+
+            try {
+                const response = await fetch(`${API_URL}/items/id/${itemId}`, {
+                    headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+                });
+                if (response.ok) {
+                    const item = await response.json();
+                    document.getElementById("item-name").value = item.name;
+                    document.getElementById("item-category").value = item.category;
+                    document.getElementById("item-bottle-size").value = item.bottle_size || "";
+                    document.getElementById("item-price").value = item.price;
+                    document.getElementById("item-cost-price").value = item.cost_price;
+                }
+            } catch (error) {
+                console.log("Item not found, proceeding to add new item");
+            }
+        }
+
+        
+        // --- Item Management Functions ---    
+        async function editItem(id) {
+            hideError("item-error");
+            try {
+                const response = await fetch(`${API_URL}/items/${id}`, {
+                    headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+                });
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || "Failed to load item for editing");
+                }
+                const item = await response.json();
+                document.getElementById("item-id").value = item.id;
+                document.getElementById("item-id").disabled = true; // Disable ID field during edit
+                document.getElementById("item-name").value = item.name;
+                document.getElementById("item-category").value = item.category;
+                document.getElementById("item-bottle-size").value = item.bottle_size || "";
+                document.getElementById("item-quantity").value = item.quantity;
+                document.getElementById("item-price").value = item.price;
+                document.getElementById("item-cost-price").value = item.cost_price;
+                
+                // Change Add button to Update button
+                const addItemBtn = document.querySelector("#app-section .bg-green-500");
+                if (addItemBtn) {
+                    addItemBtn.textContent = "Update Item";
+                    addItemBtn.onclick = () => addItem(id);
+                }
+
+            } catch (error) {
+                console.error("editItem error:", error);
+                showError("item-error", `Failed to load item for editing: ${error.message}`);
+            }
+        }
+
+        async function deleteItem(id) {
+            const confirmed = await showModal(`Are you sure you want to delete item ${id}?`, 'confirm');
+            if (!confirmed) return;
+
+            try {
+                const response = await fetch(`${API_URL}/items/${id}`, {
+                    method: "DELETE",
+                    headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+                });
+                if (response.ok) {
+                    showModal("Item deleted successfully!", 'alert');
+                    loadInventory();
+                    loadSaleItems();
+                } else {
+                    const data = await response.json();
+                    showModal(data.detail || "Failed to delete item", 'alert');
+                }
+            } catch (error) {
+                console.error("deleteItem error:", error);
+                showModal("Failed to delete item. Please check server connection.", 'alert');
+            }
+        }
+
+        // --- Sales Functions ---
+        async function loadSaleItems() {
+            try {
+                const response = await fetch(`${API_URL}/items/`, {
+                    headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+                });
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || "Failed to fetch items for sale");
+                }
+                const items = await response.json();
+                const select = document.getElementById("sale-item-id");
+                select.innerHTML = '<option value="">Select Item</option>';
+                items.forEach(item => {
+                    const option = document.createElement("option");
+                    option.value = item.id;
+                    option.textContent = `${item.name} (${item.category}${item.bottle_size ? ", " + item.bottle_size : ""}) - Stock: ${item.quantity}`;
+                    select.appendChild(option);
+                });
+            } catch (error) {
+                console.error("loadSaleItems error:", error);
+                showError("sale-error", "Failed to load items for sale: " + error.message);
+            }
+        }
+
+        async function recordSale() {
+            hideError("sale-error");
+            showSpinner("record-sale-spinner");
+            const sale = {
+                item_id: document.getElementById("sale-item-id").value,
+                quantity: parseInt(document.getElementById("sale-quantity").value),
+                payment_method: document.getElementById("sale-payment-method").value // Get payment method
+            };
+            
+            if (!sale.item_id) {
+                showError("sale-error", "Please select an item.");
+                hideSpinner("record-sale-spinner");
+                return;
+            }
+            if (isNaN(sale.quantity) || sale.quantity <= 0) {
+                showError("sale-error", "Please enter a valid quantity (> 0).");
+                hideSpinner("record-sale-spinner");
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_URL}/sales/`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${localStorage.getItem("token")}`
+                    },
+                    body: JSON.stringify(sale)
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    showModal("Sale recorded successfully!", 'alert');
+                    loadInventory(); // Refresh inventory to show updated stock
+                    loadSaleItems(); // Refresh sale items dropdown
+                    loadFinancials();
+                    loadFrequentSales();
+                    document.getElementById("sale-quantity").value = "";
+                    document.getElementById("sale-item-id").value = "";
+                    document.getElementById("sale-payment-method").value = "Cash"; // Reset to default
+                } else {
+                    showError("sale-error", data.detail || "Failed to record sale");
+                }
+            } catch (error) {
+                console.error("recordSale error:", error);
+                showError("sale-error", "Failed to record sale. Please check your network or server.");
+            } finally {
+                hideSpinner("record-sale-spinner");
+            }
+        }
+
+        // --- Expense Functions ---
+        async function recordExpense() {
+            hideError("expense-error");
+            showSpinner("record-expense-spinner");
+            const expense = {
+                description: document.getElementById("expense-description").value,
+                amount: parseFloat(document.getElementById("expense-amount").value)
+            };
+
+            if (!expense.description || isNaN(expense.amount) || expense.amount <= 0) {
+                showError("expense-error", "Description and a positive amount are required.");
+                hideSpinner("record-expense-spinner");
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_URL}/expenses/`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${localStorage.getItem("token")}`
+                    },
+                    body: JSON.stringify(expense)
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    showModal("Expense recorded successfully!", 'alert');
+                    loadFinancials();
+                    loadExpenses(); // Refresh expenses list
+                    document.getElementById("expense-description").value = "";
+                    document.getElementById("expense-amount").value = "";
+                } else {
+                    showError("expense-error", data.detail || "Failed to record expense");
+                }
+            } catch (error) {
+                console.error("recordExpense error:", error);
+                showError("expense-error", "Failed to record expense. Please check your network or server.");
+            } finally {
+                hideSpinner("record-expense-spinner");
+            }
+        }
+
+        async function loadExpenses() {
+            hideError("expenses-error");
+            try {
+                const response = await fetch(`${API_URL}/expenses/`, {
+                    headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+                });
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || "Failed to load expenses");
+                }
+                const expenses = await response.json();
+                const tableBody = document.getElementById("expenses-table");
+                tableBody.innerHTML = ""; // Clear existing entries
+
+                if (expenses.length === 0) {
+                    tableBody.innerHTML = '<tr><td colspan="3" class="p-2 text-center text-gray-500">No expenses recorded yet.</td></tr>';
+                    return;
+                }
+
+                expenses.forEach(expense => {
+                    const row = document.createElement("tr");
+                    row.className = "hover:bg-gray-50";
+                    row.innerHTML = `
+                        <td class="p-2 border border-gray-300">${expense.description}</td>
+                        <td class="p-2 border border-gray-300">KSh ${expense.amount.toFixed(2)}</td>
+                        <td class="p-2 border border-gray-300">${new Date(expense.timestamp).toLocaleString()}</td>
+                    `;
+                    tableBody.appendChild(row);
+                });
+            } catch (error) {
+                console.error("loadExpenses error:", error);
+                showError("expenses-error", `Failed to load expenses: ${error.message}`);
+            }
+        }
+
+        // --- Financials Functions ---
+        async function loadFinancials() {
+            try {
+                const response = await fetch(`${API_URL}/financials/`, {
+                    headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+                });
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || "Failed to load financials");
+                }
+                const data = await response.json();
+                document.getElementById("financials").innerHTML = `
+                    <p><strong>Total Revenue:</strong> KSh ${data.total_revenue.toFixed(2)}</p>
+                    <p><strong>Total Cost:</strong> KSh ${data.total_cost.toFixed(2)}</p>
+                    <p><strong>Profit:</strong> KSh ${data.profit.toFixed(2)}</p>
+                    <p><strong>Total Expenses:</strong> KSh ${data.total_expenses.toFixed(2)}</p>
+                    <p class="mt-2 text-lg font-semibold">Available Funds:</p>
+                    <p class="ml-4"><strong>Cash:</strong> KSh ${data.available_funds_cash.toFixed(2)}</p>
+                    <p class="ml-4"><strong>Mpesa:</strong> KSh ${data.available_funds_mpesa.toFixed(2)}</p>
+                    <p class="ml-4"><strong>Overall Total:</strong> KSh ${data.overall_available_funds.toFixed(2)}</p>
+                `;
+            } catch (error) {
+                console.error("loadFinancials error:", error);
+                document.getElementById("financials").innerHTML = `<p class='text-red-500'>Failed to load financials: ${error.message}</p>`;
+            }
+        }
+
+        // --- Analytics Functions ---
+        async function loadFrequentSales() {
+            try {
+                const response = await fetch(`${API_URL}/analytics/frequent-sales/`, {
+                    headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+                });
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || "Failed to load frequent sales");
+                }
+                const items = await response.json();
+                const table = document.getElementById("frequent-sales-table");
+                table.innerHTML = "";
+                if (items.length === 0) {
+                    table.innerHTML = "<tr><td colspan='2' class='p-2 text-center text-gray-500'>No frequent sales data available.</td></tr>";
+                    return;
+                }
+                items.forEach(item => {
+                    const row = document.createElement("tr");
+                    row.className = "hover:bg-gray-50";
+                    row.innerHTML = `
+                        <td class="p-2 border border-gray-300">${item.item.name} (${item.item.category}${item.item.bottle_size ? ", " + item.item.bottle_size : ""})</td>
+                        <td class="p-2 border border-gray-300">${item.item.category === "cigarette" ? `${item.total_sold} packs (${item.total_sold * 20} cigarettes)` : item.total_sold}</td>
+                    `;
+                    table.appendChild(row);
+                });
+            } catch (error) {
+                console.error("loadFrequentSales error:", error);
+                document.getElementById("frequent-sales-table").innerHTML = `<tr><td colspan='2' class='text-red-500 p-2'>Failed to load frequent sales: ${error.message}</td></tr>`;
+            }
+        }
+
+        // Chart.js helper function
+        function createOrUpdateChart(chartId, type, labels, data, title) {
+            const colors = ['#FF6B6B', '#4ECDC4', '#45B1D8',
+                            '#96CEB4', '#FFEEAD', '#FF6B6B', 
+                            '#4ECDC4', '#45B1D8', '#96CEB4',   
+                            '#FFEEAD'];
+            const borderColors = ['#FF6B6B', '#4ECDC4', '#45B1D8',
+                            '#96CEB4', '#FFEEAD', '#FF6B6B', 
+                            '#4ECDC4', '#45B1D8', '#96CEB4',   
+                            '#FFEEAD'];
+            const ctx = document.getElementById(chartId);
+            if (!ctx) {
+                console.error(`Canvas element with ID '${chartId}' not found.`);
+                return;
+            }
+
+            // Destroy existing chart instance if it exists
+            if (chartId === 'daily-sales-chart' && dailySalesChartInstance) {
+                dailySalesChartInstance.destroy();
+                dailySalesChartInstance = null; // Clear reference
+            } else if (chartId === 'weekly-sales-chart' && weeklySalesChartInstance) {
+                weeklySalesChartInstance.destroy();
+                weeklySalesChartInstance = null; // Clear reference
+            }
+
+            const newChart = new Chart(ctx, {
+                type: type,
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: title,
+                        data: data,
+                        backgroundColor: colors.slice(0, data.length),
+                        borderColor: borderColors.slice(0, data.length),
+                        borderWidth: 10,
+                        fill: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    aspectRatio: 10,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Revenue (KSh)'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Item / Week'
+                            }
+                        }
+                    },
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: title
+                        },
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
+            });
+
+            // Store the new chart instance
+            if (chartId === 'daily-sales-chart') {
+                dailySalesChartInstance = newChart;
+            } else if (chartId === 'weekly-sales-chart') {
+                weeklySalesChartInstance = newChart;
+            }
+        }
+
+
+        async function getDailySales() {
+            hideError("daily-sales-error");
+            showSpinner("daily-sales-spinner");
+            const date = document.getElementById("daily-sales-date").value;
+            const chartCanvas = document.getElementById("daily-sales-chart");
+            const tableContainer = document.getElementById("daily-sales-table-container"); // This element is now stable
+
+            // Defensive check: Ensure tableContainer exists
+            if (!tableContainer) {
+                console.error("Error: daily-sales-table-container not found in DOM!");
+                showError("daily-sales-error", "Application error: Sales table container not found. Please refresh.");
+                hideSpinner("daily-sales-spinner");
+                return; // Stop execution if element is missing
+            }
+
+            // Clear previous content
+            tableContainer.innerHTML = ''; // Clear only the table container
+            if (dailySalesChartInstance) {
+                dailySalesChartInstance.destroy();
+                dailySalesChartInstance = null;
+            }
+            if (chartCanvas) chartCanvas.style.display = 'block'; // Ensure canvas is visible for new chart
+
+            if (!date) {
+                showError("daily-sales-error", "Please select a date.");
+                hideSpinner("daily-sales-spinner");
+                return;
+            }
+            try {
+                const response = await fetch(`${API_URL}/analytics/daily-sales/?date=${date}`, {
+                    headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+                });
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || "Failed to load daily sales");
+                }
+                const data = await response.json();
+        
+                const itemMap = {};
+                globalInventory.forEach(item => {
+                    itemMap[item.id] = item.name;
+                });
+
+                let summaryHtml = `<p><strong>Date:</strong> ${data.date}</p><p><strong>Total Revenue:</strong> KSh ${data.total_revenue.toFixed(2)}</p>`;
+                
+                // Prepare data for chart
+                const chartLabels = [];
+                const chartData = [];
+                const dailySalesByItem = {}; // Aggregate sales by item for the chart
+
+                data.sales.forEach(sale => {
+                    const itemName = itemMap[sale.item_id] || `Item ${sale.item_id}`;
+                    if (!dailySalesByItem[itemName]) {
+                        dailySalesByItem[itemName] = 0;
+                    }
+                    // Assuming price is available in globalInventory for revenue calculation
+                    const itemDetails = globalInventory.find(item => item.id === sale.item_id);
+                    if (itemDetails) {
+                        dailySalesByItem[itemName] += sale.quantity * itemDetails.price;
+                    }
+                });
+
+                for (const itemName in dailySalesByItem) {
+                    chartLabels.push(itemName);
+                    chartData.push(dailySalesByItem[itemName]);
+                }
+
+                // Render Chart
+                if (chartLabels.length > 0) {
+                    createOrUpdateChart('daily-sales-chart', 'bar', chartLabels, chartData, `Daily Sales Revenue for ${data.date}`);
+                } else {
+                    if (chartCanvas) chartCanvas.style.display = 'none'; // Hide canvas if no data
+                }
+
+                if (data.sales.length) {
+                    const tableHtml = `
+                        <h4 class="text-md font-semibold mt-4">Detailed Sales:</h4>
+                        <table class="w-full mt-2 border-collapse border border-gray-300">
+                            <thead>
+                                <tr class="bg-gray-200">
+                                    <th class="p-2 border border-gray-300 text-left">Item ID</th>
+                                    <th class="p-2 border border-gray-300 text-left">Item Name</th>
+                                    <th class="p-2 border border-gray-300 text-left">Quantity</th>
+                                    <th class="p-2 border border-gray-300 text-left">Sold By</th>
+                                    <th class="p-2 border border-gray-300 text-left">Payment Method</th>
+                                    <th class="p-2 border border-gray-300 text-left">Timestamp</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${data.sales.map(sale => {
+                                    const itemName = itemMap[sale.item_id] || `Item ${sale.item_id}`;
+                                    return `<tr class="hover:bg-gray-50">
+                                        <td class="p-2 border border-gray-300">${sale.item_id}</td>
+                                        <td class="p-2 border border-gray-300">${itemName}</td>
+                                        <td class="p-2 border border-gray-300">${sale.quantity}</td>
+                                        <td class="p-2 border border-gray-300">${sale.user_name}</td>
+                                        <td class="p-2 border border-gray-300">${sale.payment_method || 'N/A'}</td>
+                                        <td class="p-2 border border-gray-300">${new Date(sale.timestamp).toLocaleString()}</td>
+                                    </tr>`;
+                                }).join("")}
+                            </tbody>
+                        </table>
+                    `;
+                    tableContainer.innerHTML = summaryHtml + tableHtml; // Set summary and table
+                } else {
+                    tableContainer.innerHTML = summaryHtml + "<p>No sales for this date</p>";
+                }
+            } catch (error) {
+                console.error("getDailySales error:", error);
+                tableContainer.innerHTML = `<p class='text-red-500'>Failed to load daily sales: ${error.message}</p>`;
+                if (chartCanvas) chartCanvas.style.display = 'none'; // Hide canvas on error
+            } finally {
+                hideSpinner("daily-sales-spinner");
+            }
+        }
+
+        async function getWeeklySales() {
+            hideError("weekly-sales-error");
+            showSpinner("weekly-sales-spinner");
+            const date = document.getElementById("weekly-sales-date").value;
+            const chartCanvas = document.getElementById("weekly-sales-chart");
+            const tableContainer = document.getElementById("weekly-sales-table-container"); // This element is now stable
+
+            // Defensive check: Ensure tableContainer exists
+            if (!tableContainer) {
+                console.error("Error: weekly-sales-table-container not found in DOM!");
+                showError("weekly-sales-error", "Application error: Weekly sales table container not found. Please refresh.");
+                hideSpinner("weekly-sales-spinner");
+                return; // Stop execution if element is missing
+            }
+
+            // Clear previous content
+            tableContainer.innerHTML = ''; // Clear only the table container
+            if (weeklySalesChartInstance) {
+                weeklySalesChartInstance.destroy();
+                weeklySalesChartInstance = null;
+            }
+            if (chartCanvas) chartCanvas.style.display = 'block'; // Ensure canvas is visible for new chart
+
+            if (!date) {
+                showError("weekly-sales-error", "Please select a start date for the week.");
+                hideSpinner("weekly-sales-spinner");
+                return;
+            }
+            try {
+                const response = await fetch(`${API_URL}/analytics/weekly-sales/?start_date=${date}`, {
+                    headers: { "Authorization": `Bearer ${localStorage.getItem("token")}` }
+                });
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || "Failed to load weekly sales");
+                }
+                const data = await response.json();
+        
+                const itemMap = {};
+                globalInventory.forEach(item => {
+                    itemMap[item.id] = item.name;
+                });
+        
+                let summaryHtml = `<p><strong>Start Date:</strong> ${data.start_date}</p><p><strong>Total Revenue:</strong> KSh ${data.total_revenue.toFixed(2)}</p>`;
+                
+                // Prepare data for chart
+                const chartLabels = [];
+                const chartData = [];
+                const weeklySalesByItem = {}; // Aggregate sales by item for the chart
+
+                data.sales.forEach(sale => {
+                    const itemName = itemMap[sale.item_id] || `Item ${sale.item_id}`;
+                    if (!weeklySalesByItem[itemName]) {
+                        weeklySalesByItem[itemName] = 0;
+                    }
+                    const itemDetails = globalInventory.find(item => item.id === sale.item_id);
+                    if (itemDetails) {
+                        weeklySalesByItem[itemName] += sale.quantity * itemDetails.price;
+                    }
+                });
+
+                for (const itemName in weeklySalesByItem) {
+                    chartLabels.push(itemName);
+                    chartData.push(weeklySalesByItem[itemName]);
+                }
+
+                // Render Chart
+                if (chartLabels.length > 0) {
+                    createOrUpdateChart('weekly-sales-chart', 'bar', chartLabels, chartData, `Weekly Sales Revenue from ${data.start_date}`);
+                } else {
+                    if (chartCanvas) chartCanvas.style.display = 'none'; // Hide canvas if no data
+                }
+
+                if (data.sales.length) {
+                    const tableHtml = `
+                        <h4 class="text-md font-semibold mt-4">Detailed Sales:</h4>
+                        <table class="w-full mt-2 border-collapse border border-gray-300">
+                            <thead>
+                                <tr class="bg-gray-200">
+                                    <th class="p-2 border border-gray-300 text-left">Item ID</th>
+                                    <th class="p-2 border border-gray-300 text-left">Item Name</th>
+                                    <th class="p-2 border border-gray-300 text-left">Quantity</th>
+                                    <th class="p-2 border border-gray-300 text-left">Sold By</th>
+                                    <th class="p-2 border border-gray-300 text-left">Payment Method</th>
+                                    <th class="p-2 border border-gray-300 text-left">Timestamp</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${data.sales.map(sale => {
+                                    const itemName = itemMap[sale.item_id] || `Item ${sale.item_id}`;
+                                    return `<tr class="hover:bg-gray-50">
+                                        <td class="p-2 border border-gray-300">${sale.item_id}</td>
+                                        <td class="p-2 border border-gray-300">${itemName}</td>
+                                        <td class="p-2 border border-gray-300">${sale.quantity}</td>
+                                        <td class="p-2 border border-gray-300">${sale.user_name}</td>
+                                        <td class="p-2 border border-gray-300">${sale.payment_method || 'N/A'}</td>
+                                        <td class="p-2 border border-gray-300">${new Date(sale.timestamp).toLocaleString()}</td>
+                                    </tr>`;
+                                }).join("")}
+                            </tbody>
+                        </table>
+                    `;
+                    tableContainer.innerHTML = summaryHtml + tableHtml; // Set summary and table
+                } else {
+                    tableContainer.innerHTML = summaryHtml + "<p>No sales for this week</p>";
+                }
+            } catch (error) {
+                console.error("getWeeklySales error:", error);
+                tableContainer.innerHTML = `<p class='text-red-500'>Failed to load weekly sales: ${error.message}</p>`;
+                if (chartCanvas) chartCanvas.style.display = 'none'; // Hide canvas on error
+            } finally {
+                hideSpinner("weekly-sales-spinner");
+            }
+        }
+
+        // --- Initial Load ---
+        // Call toggleSections on page load to determine initial view
+        toggleSections(localStorage.getItem("must_change_password") === "true");
+    </script>
+</body>
+</html>
